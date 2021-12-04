@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use itertools::Itertools;
 use std::collections::HashSet;
 
 fn main() {
@@ -37,20 +38,18 @@ fn day4() {
         .lines()
         .skip(1)
         .filter(|l| !l.is_empty())
-        .collect::<Vec<_>>()
         .chunks(5)
+        .into_iter()
         .map(|lines| {
             lines
-                .iter()
                 .map(|l| {
                     l.split(" ")
-                        .filter(|n| !n.is_empty())
-                        .map(|n| n.parse::<u32>().unwrap())
+                        .filter_map(|n| n.parse::<u32>().ok())
                         .collect::<Vec<_>>()
                         .try_into()
                         .unwrap()
                 })
-                .collect::<Vec<[u32; 5]>>()
+                .collect::<Vec<_>>()
                 .try_into()
                 .unwrap()
         })
@@ -80,10 +79,9 @@ fn day4() {
         let ns = ns
             .into_iter()
             .chain(std::iter::once(n))
-            .collect::<HashSet<_>>();
+            .collect::<_>();
         let score = bs.get(0).map(|b| board_score(b, &ns, n)).or(score);
-
-        let next_boards: Vec<_> = bs.into_iter().filter(|b| !is_bingo(b, &ns)).collect();
+        let next_boards = bs.into_iter().filter(|b| !is_bingo(b, &ns)).collect();
 
         (score, next_boards, ns)
     });
