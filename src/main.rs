@@ -4,8 +4,7 @@
 mod previous_days;
 
 use itertools::Itertools;
-use rayon::prelude::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 fn step(state: &[(u64, u64)]) -> Vec<(u64, u64)> {
     let new = state.get(0).map_or(0, |&(_, k)| k) + state.get(2).map_or(0, |&(a, _)| a);
