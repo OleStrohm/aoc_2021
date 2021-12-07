@@ -3,52 +3,41 @@
 
 mod previous_days;
 
-use itertools::Itertools;
-use std::collections::HashMap;
+use std::ops::Sub;
 
-fn step(state: &[(u64, u64)]) -> Vec<(u64, u64)> {
-    let new = state.get(0).map_or(0, |&(_, k)| k) + state.get(2).map_or(0, |&(a, _)| a);
-    state
-        .split_at(1)
-        .1
-        .iter()
-        .copied()
-        .chain(std::iter::once((new, new)))
-        .collect()
+use itertools::Itertools;
+
+fn sum_1_to_n(n: i64) -> i64 {
+    n * (n + 1) / 2
 }
 
-fn day6() {
-    let s = include_str!("day6.txt");
-    let numbers = s
+fn day7() {
+    let s = include_str!("day7.txt");
+    let positions = s
         .trim_end()
         .split(',')
-        .map(|n| n.parse::<u64>().unwrap())
+        .map(|n| dbg!(n).parse::<i64>().unwrap())
         .sorted()
-        .group_by(|&n| n)
-        .into_iter()
-        .map(|(key, group)| (key, group.count() as _))
-        .collect::<HashMap<_, _>>();
-    let state = itertools::repeat_n((0, 0), 2)
-        .chain((0..7).map(|d| (numbers.get(&d).copied().unwrap_or(0), 0)))
         .collect_vec();
+    let (&min, &max) = positions.iter().minmax().into_option().unwrap();
+    let least_fuel = (min..=max)
+        .map(|p| positions.iter().map(|cp| cp.sub(p).abs()).sum::<i64>())
+        .min()
+        .unwrap();
+    println!("part 1: {:?}", least_fuel,);
 
-    let part1 = (0..80).fold(state.clone(), |state, _| step(&state));
-
-    println!(
-        "part 1: {}",
-        part1.iter().skip(2).map(|(a, _)| a).sum::<u64>()
-            + part1.iter().map(|(_, k)| k).sum::<u64>()
-    );
-
-    let part2 = (0..256).fold(state, |state, _| step(&state));
-
-    println!(
-        "part 1: {}",
-        part2.iter().skip(2).map(|(a, _)| a).sum::<u64>()
-            + part2.iter().map(|(_, k)| k).sum::<u64>()
-    );
+    let least_fuel = (min..=max)
+        .map(|p| {
+            positions
+                .iter()
+                .map(|cp| sum_1_to_n(cp.sub(p).abs()))
+                .sum::<i64>()
+        })
+        .min()
+        .unwrap();
+    println!("part 2: {:?}", least_fuel,);
 }
 
 fn main() {
-    day6();
+    day7();
 }
