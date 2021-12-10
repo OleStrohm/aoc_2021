@@ -1,127 +1,86 @@
 #![allow(dead_code)]
 #![allow(unused)]
 
-use std::collections::{HashMap, HashSet};
+use std::io::BufRead;
 
 use itertools::Itertools;
 
 mod previous_days;
 
 fn main() {
-    let s = include_str!("day9.txt");
-    let grid = s
-        .lines()
-        .map(|l| l.chars().map(|c| c.to_digit(10).unwrap()).collect_vec())
-        .collect_vec();
+    let s = include_str!("day10.txt");
 
-    let low_points = grid
-        .iter()
-        .enumerate()
-        .flat_map(|(y, r)| {
-            let grid = &grid;
-            r.iter().enumerate().filter_map(move |(x, n)| {
-                let up = y
-                    .checked_sub(1)
-                    .and_then(|y| grid.get(y))
-                    .and_then(|r| r.get(x));
-                let down = grid.get(y + 1).and_then(|r| r.get(x));
-                let left = grid
-                    .get(y)
-                    .and_then(|r| x.checked_sub(1).and_then(|x| r.get(x)));
-                let right = grid.get(y).and_then(|r| r.get(x + 1));
-
-                up.into_iter()
-                    .chain(down)
-                    .chain(left)
-                    .chain(right)
-                    .min()
-                    .and_then(|min| (n < min).then(|| (x, y, n)))
-            })
-        })
-        .collect_vec();
-    let risk_level = low_points.iter().map(|(_, _, &low)| low + 1).sum::<u32>();
-    println!("part 1: {}", risk_level);
-
-    let height = s.lines().count();
-    let width = s.lines().next().unwrap().len();
-
-    fn flood_fill(
-        g: &mut Vec<Vec<(usize, usize, u32)>>,
-        basin: (usize, usize),
-        (x, y): (usize, usize),
-    ) {
-        match g[y][x] {
-            (_, _, 9) => return,
-            (bx, by, _) if (bx, by) == basin => return,
-            _ => {
-                g[y][x] = (basin.0, basin.1, g[y][x].2);
-                if let Some(x) = x.checked_sub(1) {
-                    flood_fill(g, basin, (x, y));
-                }
-                if let Some(y) = y.checked_sub(1) {
-                    flood_fill(g, basin, (x, y));
-                }
-                if x + 1 < g[0].len() {
-                    flood_fill(g, basin, (x + 1, y));
-                }
-                if y + 1 < g.len() {
-                    flood_fill(g, basin, (x, y + 1));
-                }
-            }
+    fn closing(p: char) -> char {
+        match p {
+            '(' => ')',
+            '[' => ']',
+            '{' => '}',
+            '<' => '>',
+            _ => unreachable!(),
         }
     }
 
-    fn not_separated_by_9(
-        grid: &Vec<Vec<u32>>,
-        (sx, sy): (usize, usize),
-        (ex, ey): (usize, usize),
-    ) -> bool {
-        let xmin = sx.min(ex);
-        let xmax = sx.max(ex);
-        let ymin = sy.min(ey);
-        let ymax = sy.max(ey);
-
-        let separated = (xmin..=xmax).all(|x| grid[ymin][x] < 9)
-            && (ymin..=ymax).all(|y| grid[y][xmax] < 9)
-            || (xmin..=xmax).all(|x| grid[ymax][x] < 9) && (ymin..=ymax).all(|y| grid[y][xmin] < 9);
-        println!(
-            "sx {} | sy {} | ex {} | ey {} | not_sep {}",
-            sx, sy, ex, ey, separated
-        );
-        separated
+    enum ChunkError {
+        Incomplete(String),
+        Incorrect(u64),
     }
 
-    let mut grid = grid
-        .iter()
-        .enumerate()
-        .map(|(y, r)| r.iter().enumerate().map(|(x, &v)| (x, y, v)).collect_vec())
-        .collect_vec();
+    fn parse_chunk(mut line: &str) -> (Result<&str, ChunkError>) {
+        while let Some(p @ ('(' | '[' | '{' | '<')) = line.chars().next() {
+            //println!("opening {}", p);
+            line = match parse_chunk(&line[1..]) {
+                Ok(l) => l,
+                Err(e @ ChunkError::Incorrect(_)) => return Err(e),
+                Err(ChunkError::Incomplete(bt)) => {
+                    return Err(ChunkError::Incomplete(bt + &closing(p).to_string()))
+                }
+            };
 
-    let basin = low_points
-        .iter()
-        .map(|&(x, y, _)| {
-            let basin = (x, y);
-            if let Some(x) = x.checked_sub(1) {
-                flood_fill(&mut grid, basin, (x, y));
-            }
-            if let Some(y) = y.checked_sub(1) {
-                flood_fill(&mut grid, basin, (x, y));
-            }
-            if x + 1 < grid[0].len() {
-                flood_fill(&mut grid, basin, (x + 1, y));
-            }
-            if y + 1 < grid.len() {
-                flood_fill(&mut grid, basin, (x, y + 1));
-            }
+            //println!("try closing {}", closing(p));
+            line = match line.chars().next() {
+                Some(c) if c == closing(p) => Ok(&line[1..]),
+                Some(')') => Err(ChunkError::Incorrect(3)),
+                Some(']') => Err(ChunkError::Incorrect(57)),
+                Some('}') => Err(ChunkError::Incorrect(1197)),
+                Some('>') => Err(ChunkError::Incorrect(25137)),
+                None => Err(ChunkError::Incomplete(closing(p).to_string())),
+                _ => unreachable!(),
+            }?;
+        }
 
-            grid.iter()
-                .flat_map(|r| r.iter().filter(|(bx, by, _)| (*bx, *by) == basin))
-                .count() as u64
+        Ok(line)
+    }
+
+    let syntax_error = s
+        .lines()
+        .filter_map(|l| match parse_chunk(l) {
+            Err(ChunkError::Incorrect(e)) => Some(e),
+            _ => None,
+        })
+        .sum::<u64>();
+    
+    println!("part 1: {}", syntax_error);
+
+    let autocomplete_error = s
+        .lines()
+        .filter_map(|l| match parse_chunk(l) {
+            Err(ChunkError::Incomplete(bt)) => Some(dbg!(bt)),
+            _ => None,
+        })
+        .map(|bt| {
+            bt.chars().fold(0_u64, |s, c| {
+                5 * s
+                    + match c {
+                        ')' => 1,
+                        ']' => 2,
+                        '}' => 3,
+                        '>' => 4,
+                        _ => unreachable!(),
+                    }
+            })
         })
         .sorted()
-        .rev()
-        .take(3)
-        .product::<u64>();
+        .collect_vec();
 
-    println!("part 2: {}", basin);
+    println!("part 2: {}", autocomplete_error[autocomplete_error.len()/2]);
 }
