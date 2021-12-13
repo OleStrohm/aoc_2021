@@ -1,86 +1,65 @@
 #![allow(dead_code)]
 #![allow(unused)]
 
-use std::io::BufRead;
-
 use itertools::Itertools;
 
 mod previous_days;
 
 fn main() {
-    let s = include_str!("day10.txt");
-
-    fn closing(p: char) -> char {
-        match p {
-            '(' => ')',
-            '[' => ']',
-            '{' => '}',
-            '<' => '>',
-            _ => unreachable!(),
-        }
-    }
-
-    enum ChunkError {
-        Incomplete(String),
-        Incorrect(u64),
-    }
-
-    fn parse_chunk(mut line: &str) -> (Result<&str, ChunkError>) {
-        while let Some(p @ ('(' | '[' | '{' | '<')) = line.chars().next() {
-            //println!("opening {}", p);
-            line = match parse_chunk(&line[1..]) {
-                Ok(l) => l,
-                Err(e @ ChunkError::Incorrect(_)) => return Err(e),
-                Err(ChunkError::Incomplete(bt)) => {
-                    return Err(ChunkError::Incomplete(bt + &closing(p).to_string()))
-                }
-            };
-
-            //println!("try closing {}", closing(p));
-            line = match line.chars().next() {
-                Some(c) if c == closing(p) => Ok(&line[1..]),
-                Some(')') => Err(ChunkError::Incorrect(3)),
-                Some(']') => Err(ChunkError::Incorrect(57)),
-                Some('}') => Err(ChunkError::Incorrect(1197)),
-                Some('>') => Err(ChunkError::Incorrect(25137)),
-                None => Err(ChunkError::Incomplete(closing(p).to_string())),
-                _ => unreachable!(),
-            }?;
-        }
-
-        Ok(line)
-    }
-
-    let syntax_error = s
-        .lines()
-        .filter_map(|l| match parse_chunk(l) {
-            Err(ChunkError::Incorrect(e)) => Some(e),
-            _ => None,
+    let s = include_str!("day13.txt");
+    let mut lines = s.lines();
+    let locations: Vec<(u32, u32)> = (&mut lines)
+        .take_while(|l| !l.is_empty())
+        .map(|l| {
+            l.split(',')
+                .map(|s| s.parse::<u32>().unwrap())
+                .collect_tuple()
+                .unwrap()
         })
-        .sum::<u64>();
-    
-    println!("part 1: {}", syntax_error);
-
-    let autocomplete_error = s
-        .lines()
-        .filter_map(|l| match parse_chunk(l) {
-            Err(ChunkError::Incomplete(bt)) => Some(dbg!(bt)),
-            _ => None,
-        })
-        .map(|bt| {
-            bt.chars().fold(0_u64, |s, c| {
-                5 * s
-                    + match c {
-                        ')' => 1,
-                        ']' => 2,
-                        '}' => 3,
-                        '>' => 4,
-                        _ => unreachable!(),
-                    }
-            })
-        })
-        .sorted()
         .collect_vec();
 
-    println!("part 2: {}", autocomplete_error[autocomplete_error.len()/2]);
+    #[derive(Copy, Clone)]
+    enum FoldAlong {
+        X(u32),
+        Y(u32),
+    }
+
+    let instructions = lines
+        .map(|l| match l.split('=').collect_tuple() {
+            Some(("fold along x", p)) => FoldAlong::X(p.parse().unwrap()),
+            Some(("fold along y", p)) => FoldAlong::Y(p.parse().unwrap()),
+            _ => unreachable!(),
+        })
+        .collect_vec();
+
+    fn fold_along(dots: Vec<(u32, u32)>, fold: FoldAlong) -> Vec<(u32, u32)> {
+        dots.iter()
+            .map(|&(x, y)| match fold {
+                FoldAlong::X(p) => (if x < p { x } else { 2 * p - x }, y),
+                FoldAlong::Y(p) => (x, if y < p { y } else { 2 * p - y }),
+            })
+            .collect()
+    }
+
+    println!(
+        "part 1: {}",
+        fold_along(locations.clone(), instructions[0])
+            .into_iter()
+            .counts()
+            .keys()
+            .count()
+    );
+
+    let code = instructions.iter().fold(locations, |s, &instr| fold_along(s, instr));
+    println!("part 2:");
+    for y in 0..6 {
+        for x in 0..40 {
+            if code.contains(&(x, y)) {
+                print!("#");
+            } else {
+                print!(".");
+            }
+        }
+        println!();
+    }
 }

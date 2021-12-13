@@ -1,7 +1,256 @@
+use itertools::FoldWhile::{Continue, Done};
 use itertools::Itertools;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::ops::Sub;
+
+fn day12() {
+    type Link = (String, String);
+
+    let s = include_str!("day12.txt");
+
+    let links: Vec<Link> = s
+        .lines()
+        .map(|l| l.split('-').map(|s| s.to_string()).collect_tuple().unwrap())
+        .collect_vec();
+
+    fn find_paths(
+        path: &mut Vec<String>,
+        links: &Vec<Link>,
+        valid_path: impl Fn(&String, &[String]) -> bool + Copy,
+    ) -> u64 {
+        let mut paths = 0;
+        for (l, r) in links {
+            paths += match path.last() {
+                Some(c) if c == l || c == r => {
+                    let (cur, next) = if c == l { (l, r) } else { (r, l) };
+                    if next == "end" {
+                        1
+                    } else if next == "start" {
+                        0
+                    } else if valid_path(next, path) {
+                        path.push(next.clone());
+                        let paths = find_paths(path, links, valid_path);
+                        path.pop();
+                        paths
+                    } else {
+                        0
+                    }
+                }
+                _ => 0,
+            }
+        }
+
+        paths
+    }
+
+    let mut v = vec![String::from("start")];
+    println!(
+        "part 1: {}",
+        find_paths(&mut v, &links, |s, p| {
+            s.chars().any(|c| c.is_ascii_uppercase()) || !p.contains(s)
+        })
+    );
+    let mut v = vec![String::from("start")];
+    println!(
+        "part 2: {}",
+        find_paths(&mut v, &links, |s, p| {
+            s.chars().any(|c| c.is_ascii_uppercase())
+                || p.iter()
+                    .filter(|c| !c.chars().any(|ch| ch.is_ascii_uppercase()))
+                    .counts()
+                    .into_iter()
+                    .all(|(_, count)| count == 1)
+                || !p.contains(s)
+        })
+    );
+}
+
+fn day11() {
+    let s = include_str!("day11.txt");
+
+    let mut grid: Vec<Vec<u32>> = s
+        .lines()
+        .map(|l| l.chars().map(|c| c.to_digit(10).unwrap()).collect_vec())
+        .collect_vec();
+
+    fn step(grid: Vec<Vec<u32>>, old_grid: Vec<Vec<u32>>) -> Vec<Vec<u32>> {
+        fn offset((x, y): (usize, usize), (dx, dy): (isize, isize)) -> Option<(usize, usize)> {
+            Some((
+                (x as isize + dx).try_into().ok()?,
+                (y as isize + dy).try_into().ok()?,
+            ))
+        }
+
+        let new_grid = grid
+            .iter()
+            .enumerate()
+            .map(|(y, col)| {
+                col.iter()
+                    .enumerate()
+                    .map(|(x, v)| {
+                        let boost = [
+                            (-1, -1),
+                            (0, -1),
+                            (1, -1),
+                            (-1, 0),
+                            (1, 0),
+                            (-1, 1),
+                            (0, 1),
+                            (1, 1),
+                        ]
+                        .map(|off| offset((x, y), off))
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|(x, y)| {
+                            Some((*old_grid.get(y)?.get(x)?, *grid.get(y)?.get(x)?))
+                        })
+                        .filter(|&(old, new)| old < 10 && new >= 10)
+                        .count();
+
+                        ((v + boost as u32).min(10))
+                    })
+                    .collect_vec()
+            })
+            .collect_vec();
+
+        if new_grid != grid {
+            step(new_grid, grid)
+        } else {
+            new_grid
+        }
+    }
+
+    fn print_grid(grid: &Vec<Vec<u32>>) {
+        println!("");
+        for row in grid {
+            for v in row {
+                print!("{}", v);
+            }
+            println!("");
+        }
+    }
+
+    let (_, flashes) = (0..100).fold((grid.clone(), 0), |(grid, flashes), _| {
+        let new_grid = grid
+            .iter()
+            .map(|r| r.iter().map(|v| (v + 1).min(10)).collect_vec())
+            .collect_vec();
+        let grid = step(new_grid, grid);
+        let flashes = flashes + grid.iter().flatten().filter(|&&v| v == 10).count();
+        let grid = grid
+            .iter()
+            .map(|r| r.iter().map(|v| v % 10).collect_vec())
+            .collect_vec();
+
+        (grid, flashes)
+    });
+
+    println!("part 1: {}", flashes);
+
+    let (_, steps_to_all_flashing) = (1..)
+        .fold_while((grid, 0), |(grid, time), s| {
+            let new_grid = grid
+                .iter()
+                .map(|r| r.iter().map(|v| (v + 1).min(10)).collect_vec())
+                .collect_vec();
+            let grid = step(new_grid, grid);
+            if grid.iter().flatten().all(|&v| v == 10) {
+                Done((grid, s))
+            } else {
+                let grid = grid
+                    .iter()
+                    .map(|r| r.iter().map(|v| v % 10).collect_vec())
+                    .collect_vec();
+
+                Continue((grid, 0))
+            }
+        })
+        .into_inner();
+
+    println!("part 2: {}", steps_to_all_flashing);
+}
+
+fn day10() {
+    let s = include_str!("day10.txt");
+
+    fn closing(p: char) -> char {
+        match p {
+            '(' => ')',
+            '[' => ']',
+            '{' => '}',
+            '<' => '>',
+            _ => unreachable!(),
+        }
+    }
+
+    enum ChunkError {
+        Incomplete(String),
+        Incorrect(u64),
+    }
+
+    fn parse_chunk(mut line: &str) -> (Result<&str, ChunkError>) {
+        while let Some(p @ ('(' | '[' | '{' | '<')) = line.chars().next() {
+            //println!("opening {}", p);
+            line = match parse_chunk(&line[1..]) {
+                Ok(l) => l,
+                Err(e @ ChunkError::Incorrect(_)) => return Err(e),
+                Err(ChunkError::Incomplete(bt)) => {
+                    return Err(ChunkError::Incomplete(bt + &closing(p).to_string()))
+                }
+            };
+
+            //println!("try closing {}", closing(p));
+            line = match line.chars().next() {
+                Some(c) if c == closing(p) => Ok(&line[1..]),
+                Some(')') => Err(ChunkError::Incorrect(3)),
+                Some(']') => Err(ChunkError::Incorrect(57)),
+                Some('}') => Err(ChunkError::Incorrect(1197)),
+                Some('>') => Err(ChunkError::Incorrect(25137)),
+                None => Err(ChunkError::Incomplete(closing(p).to_string())),
+                _ => unreachable!(),
+            }?;
+        }
+
+        Ok(line)
+    }
+
+    let syntax_error = s
+        .lines()
+        .filter_map(|l| match parse_chunk(l) {
+            Err(ChunkError::Incorrect(e)) => Some(e),
+            _ => None,
+        })
+        .sum::<u64>();
+
+    println!("part 1: {}", syntax_error);
+
+    let autocomplete_error = s
+        .lines()
+        .filter_map(|l| match parse_chunk(l) {
+            Err(ChunkError::Incomplete(bt)) => Some(dbg!(bt)),
+            _ => None,
+        })
+        .map(|bt| {
+            bt.chars().fold(0_u64, |s, c| {
+                5 * s
+                    + match c {
+                        ')' => 1,
+                        ']' => 2,
+                        '}' => 3,
+                        '>' => 4,
+                        _ => unreachable!(),
+                    }
+            })
+        })
+        .sorted()
+        .collect_vec();
+
+    println!(
+        "part 2: {}",
+        autocomplete_error[autocomplete_error.len() / 2]
+    );
+}
 
 fn day9() {
     let s = include_str!("day9.txt");
