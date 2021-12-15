@@ -1,65 +1,74 @@
 #![allow(dead_code)]
 #![allow(unused)]
 
+use std::collections::{HashMap, VecDeque};
+use std::slice::SliceIndex;
+
 use itertools::Itertools;
 
 mod previous_days;
 
 fn main() {
-    let s = include_str!("day13.txt");
-    let mut lines = s.lines();
-    let locations: Vec<(u32, u32)> = (&mut lines)
-        .take_while(|l| !l.is_empty())
-        .map(|l| {
-            l.split(',')
-                .map(|s| s.parse::<u32>().unwrap())
-                .collect_tuple()
-                .unwrap()
+    let s = include_str!("day15.txt");
+
+    let grid = s
+        .lines()
+        .map(|l| l.chars().map(|c| c.to_digit(10).unwrap()).collect_vec())
+        .collect_vec();
+
+    let height = grid.len();
+    let width = grid[0].len();
+
+    let grid = &grid;
+
+    let mut grid = (0..5 * height)
+        .map(|y| {
+            (0..5 * width)
+                .map(move |x| {
+                    (
+                        (grid[y % height][x % width] + (x / width + y / height) as u32 - 1) % 9
+                            + 1,
+                        None,
+                    )
+                })
+                .collect_vec()
         })
         .collect_vec();
 
-    #[derive(Copy, Clone)]
-    enum FoldAlong {
-        X(u32),
-        Y(u32),
-    }
+    let height = grid.len();
+    let width = grid[0].len();
 
-    let instructions = lines
-        .map(|l| match l.split('=').collect_tuple() {
-            Some(("fold along x", p)) => FoldAlong::X(p.parse().unwrap()),
-            Some(("fold along y", p)) => FoldAlong::Y(p.parse().unwrap()),
-            _ => unreachable!(),
-        })
-        .collect_vec();
+    let mut queue = VecDeque::new();
+    queue.push_back((0, 0, 0));
 
-    fn fold_along(dots: Vec<(u32, u32)>, fold: FoldAlong) -> Vec<(u32, u32)> {
-        dots.iter()
-            .map(|&(x, y)| match fold {
-                FoldAlong::X(p) => (if x < p { x } else { 2 * p - x }, y),
-                FoldAlong::Y(p) => (x, if y < p { y } else { 2 * p - y }),
-            })
-            .collect()
-    }
-
-    println!(
-        "part 1: {}",
-        fold_along(locations.clone(), instructions[0])
-            .into_iter()
-            .counts()
-            .keys()
-            .count()
-    );
-
-    let code = instructions.iter().fold(locations, |s, &instr| fold_along(s, instr));
-    println!("part 2:");
-    for y in 0..6 {
-        for x in 0..40 {
-            if code.contains(&(x, y)) {
-                print!("#");
-            } else {
-                print!(".");
-            }
+    let risk = loop {
+        let (x, y, tot_risk) = queue.pop_front().unwrap();
+        if grid[y][x].1.is_some() {
+            continue;
         }
-        println!();
-    }
+
+        if (x, y) == (width - 1, height - 1) {
+            break tot_risk;
+        }
+
+        grid[y][x].1 = Some(tot_risk);
+
+        for new_node in [(-1, 0), (0, -1), (1, 0), (0, 1)]
+            .into_iter()
+            .map(|(dx, dy)| (x as isize + dx, y as isize + dy))
+            .filter(|&(x, y)| 0 <= x && x < width as isize && 0 <= y && y < height as isize)
+            .map(|(x, y)| {
+                (
+                    x as usize,
+                    y as usize,
+                    tot_risk + grid[y as usize][x as usize].0,
+                )
+            })
+        {
+            let (Err(i) | Ok(i)) = queue.binary_search_by_key(&new_node.2, |&(_, _, risk)| risk);
+            queue.insert(i, new_node);
+        }
+    };
+
+    println!("part 2: {}", risk);
 }

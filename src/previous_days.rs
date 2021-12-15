@@ -4,6 +4,138 @@ use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::ops::Sub;
 
+fn day14() {
+    let s = include_str!("day14.txt");
+
+    let start = s.lines().next().unwrap().chars().collect_vec();
+    let rules: HashMap<(char, char), char> = s
+        .lines()
+        .skip(2)
+        .map(|l| {
+            let (pat_left, pat_right, insert) = l
+                .split(" -> ")
+                .flat_map(str::chars)
+                .collect_tuple()
+                .unwrap();
+            ((pat_left, pat_right), insert)
+        })
+        .collect();
+
+    let mut memo: HashMap<((char, char), u32), HashMap<char, usize>> = HashMap::new();
+
+    fn expand(
+        pair: (char, char),
+        level: u32,
+        rules: &HashMap<(char, char), char>,
+        memo: &mut HashMap<((char, char), u32), HashMap<char, usize>>,
+    ) -> HashMap<char, usize> {
+        if level == 0 {
+            return HashMap::new();
+        }
+
+        let mut counts = HashMap::new();
+        if let Some(&insert) = rules.get(&pair) {
+            *counts.entry(insert).or_default() += 1;
+            let left_pair = (pair.0, insert);
+            let right_pair = (insert, pair.1);
+            if !memo.contains_key(&(left_pair, level - 1)) {
+                let memory = expand(left_pair, level - 1, rules, memo);
+                memo.insert((left_pair, level - 1), memory);
+            }
+
+            if !memo.contains_key(&(right_pair, level - 1)) {
+                let memory = expand(right_pair, level - 1, rules, memo);
+                memo.insert((right_pair, level - 1), memory);
+            }
+
+            for (&ch, &count) in memo.get(&(left_pair, level - 1)).unwrap() {
+                *counts.entry(ch).or_default() += count;
+            }
+            for (&ch, &count) in memo.get(&(right_pair, level - 1)).unwrap() {
+                *counts.entry(ch).or_default() += count;
+            }
+        }
+
+        counts
+    }
+
+    //let (min, max) =
+    let mut counts = start.iter().copied().counts();
+    for pair in start.windows(2) {
+        for (ch, count) in expand((pair[0], pair[1]), 40, &rules, &mut memo) {
+            *counts.entry(ch).or_default() += count;
+        }
+    }
+
+    let (min, max) = counts
+        .into_iter()
+        .map(|(_, c)| c)
+        .minmax()
+        .into_option()
+        .unwrap();
+
+    println!("part 1: {}", max - min);
+}
+
+fn day13() {
+    let s = include_str!("day13.txt");
+    let mut lines = s.lines();
+    let locations: Vec<(u32, u32)> = (&mut lines)
+        .take_while(|l| !l.is_empty())
+        .map(|l| {
+            l.split(',')
+                .map(|s| s.parse::<u32>().unwrap())
+                .collect_tuple()
+                .unwrap()
+        })
+        .collect_vec();
+
+    #[derive(Copy, Clone)]
+    enum FoldAlong {
+        X(u32),
+        Y(u32),
+    }
+
+    let instructions = lines
+        .map(|l| match l.split('=').collect_tuple() {
+            Some(("fold along x", p)) => FoldAlong::X(p.parse().unwrap()),
+            Some(("fold along y", p)) => FoldAlong::Y(p.parse().unwrap()),
+            _ => unreachable!(),
+        })
+        .collect_vec();
+
+    fn fold_along(dots: Vec<(u32, u32)>, fold: FoldAlong) -> Vec<(u32, u32)> {
+        dots.iter()
+            .map(|&(x, y)| match fold {
+                FoldAlong::X(p) => (if x < p { x } else { 2 * p - x }, y),
+                FoldAlong::Y(p) => (x, if y < p { y } else { 2 * p - y }),
+            })
+            .collect()
+    }
+
+    println!(
+        "part 1: {}",
+        fold_along(locations.clone(), instructions[0])
+            .into_iter()
+            .counts()
+            .keys()
+            .count()
+    );
+
+    let code = instructions.iter().fold(locations, |s, &instr| fold_along(s, instr));
+    println!("part 2:");
+    for y in 0..6 {
+        for x in 0..40 {
+            if code.contains(&(x, y)) {
+                print!("#");
+            } else {
+                print!(".");
+            }
+        }
+        println!();
+    }
+}
+
 fn day12() {
     type Link = (String, String);
 
@@ -118,16 +250,6 @@ fn day11() {
             step(new_grid, grid)
         } else {
             new_grid
-        }
-    }
-
-    fn print_grid(grid: &Vec<Vec<u32>>) {
-        println!("");
-        for row in grid {
-            for v in row {
-                print!("{}", v);
-            }
-            println!("");
         }
     }
 
