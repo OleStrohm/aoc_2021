@@ -27,11 +27,4 @@ mod day9;
 
 fn main() {
     day19::day19();
-
-    use std::collections::HashMap;
-
-    let conversions = (0..2)
-        .map(|_| (0, ((0, 0, 0), 0)))
-        .map(|c| c)
-        .collect::<HashMap<_, _>>();
 }
