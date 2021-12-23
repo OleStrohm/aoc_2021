@@ -1,7 +1,7 @@
 use std::io::BufRead;
 use std::ops::Sub;
 
-use itertools::{iproduct, Itertools};
+use itertools::Itertools;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct Point {
@@ -13,18 +13,6 @@ struct Point {
 impl Point {
     pub fn new(x: i64, y: i64, z: i64) -> Point {
         Point { x, y, z }
-    }
-}
-
-impl Sub for Point {
-    type Output = Point;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        Point {
-            x: self.x - rhs.x,
-            y: self.y - rhs.y,
-            z: self.z - rhs.z,
-        }
     }
 }
 
